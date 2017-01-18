@@ -1,6 +1,6 @@
 ## Libraries
 library(raster)
-library(rasterVis)
+library(randomForest)
 
 ## Assuming that the git repository has been downloaded, unzipped and set as working directory in R
 load("data/GewataB2.rda")
@@ -36,6 +36,28 @@ comparison <- brick(VCFplot, vcfGewata)
 plot(comparison)
 
 ## Compute RMSE
-RMSE <- sqrt(mean((comparison$layer-comparison$vcd2000Gewata)^2 , na.rm = TRUE ))
+RMSE <- sqrt(mean((comparison$layer - comparison$vcf2000Gewata)^2 , na.rm = TRUE ))
 
+## Create model with randomForest and trainingsdata
 trainingPoly@data$Code <- as.numeric(trainingPoly@data$Class)
+classes <- rasterize(trainingPoly, ndvi, field='Code')
+alldatamasked <- mask(alldata, classes)
+names(classes) <- "class"
+trainingbrick <- addLayer(alldatamasked, classes)
+valuetable <- getValues(trainingbrick)
+valuetable <- na.omit(valuetable)
+valuetable <- as.data.frame(valuetable)
+valuetable$class <- factor(valuetable$class, levels = c(1:3))
+modelRF <- randomForest(x=valuetable[ ,c(1:5)], y=valuetable$class, importance = TRUE)
+
+## Predict tree cover with randomForest model and compare with VCF tree cover
+predTC <- predict(alldata, model=modelRF, na.rm=TRUE)
+comparison2 <- brick(predTC, vcfGewata)
+comparison2 <- na.omit(comparison2)
+comparison2 <- as.data.frame(comparison2)
+plot(comparison2)
+
+## Calculate RMSE between predicted and VCF tree cover for all three classes
+RMSE <- sqrt(mean((comparison2$layer[1] - comparison2$vcf2000Gewata)^2 , na.rm = TRUE ))
+RMSE <- sqrt(mean((comparison2$layer[2] - comparison2$vcf2000Gewata)^2 , na.rm = TRUE ))
+RMSE <- sqrt(mean((comparison2$layer[3] - comparison2$vcf2000Gewata)^2 , na.rm = TRUE ))
